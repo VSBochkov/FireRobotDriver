@@ -5,8 +5,11 @@ import time
 import socket
 import netifaces
 import json
+import multiprocessing
 
 localhost = '127.0.0.1'
+kernel_proc_state = False
+kernel_agent_work = True
 
 def connect_to_cvkernel_state_sock(settings):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -16,7 +19,7 @@ def connect_to_cvkernel_state_sock(settings):
 def create_metadata_udp_server(settings):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(localhost, settings['meta_udp_port'])
-
+    return sock
 
 def connect_to_cvkernel(settings):
     return connect_to_cvkernel_state_sock(settings), create_metadata_udp_server(settings)
@@ -47,18 +50,34 @@ def parse_args():
 
     return json_file_path, cvkernel_command, cvkernel_args
 
-def main():
+def cvkernel_agent(uart, proc_state, agent_work):
+    enable_flag_sent = False
+    state_socket, metadata_socket = connect_to_cvkernel(settings)
+    while agent_work:
+        if proc_state:
+            if not enable_flag_sent:
+                state_socket.send('e')
+                enable_flag_sent = True
+            input_rects = metadata_socket.recv(2048)
 
+
+        else:
+            if enable_flag_sent:
+                state_socket.send('s')
+                enable_flag_sent = False
+    state_socket.send('c')
+    state_socket.close()
+    metadata_socket.close()
     return
 
 if __name__ == '__main__':
     json_file_path, cvkernel_comm, cvkernel_args = parse_args()
     cvkernel_pid = os.fork()
     if cvkernel_pid > 0:
-
+        uart = serial.Serial("/dev/ttyACM0", 9600)
         settings = json.load(open(json_file_path, 'r'))
-        cvkernel_conn = connect_to_cvkernel(settings)
         gamepad_conn = connect_to_gamepad(settings)
+        proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state))
         while 1:
             com = gamepad_conn.recv(1)
             if com is '0':
