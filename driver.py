@@ -1,7 +1,6 @@
 import os
 import sys
 import serial
-import time
 import socket
 import netifaces
 import json
@@ -10,6 +9,20 @@ import multiprocessing
 localhost = '127.0.0.1'
 kernel_proc_state = False
 kernel_agent_work = True
+
+firedet_en = '0' # activate autogun
+robot_forw = '1' # moving forward
+robot_back = '2' # moving backward
+robot_right = '3' # rotate robot right
+robot_left = '4' # rotate robot left
+gun_up = '5' # gun up
+gun_down = '6' # gun down
+gun_left = '7' # gun left
+gun_right = '8' # gun right
+pump_on = 'p' # pump on
+stop = 's'
+power_off = 'e'
+
 
 def connect_to_cvkernel_state_sock(settings):
     sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -50,8 +63,9 @@ def parse_args():
 
     return json_file_path, cvkernel_command, cvkernel_args
 
-def cvkernel_agent(uart, proc_state, agent_work):
+def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
     enable_flag_sent = False
+    pump_on = False
     state_socket, metadata_socket = connect_to_cvkernel(settings)
     while agent_work:
         if proc_state:
@@ -59,8 +73,36 @@ def cvkernel_agent(uart, proc_state, agent_work):
                 state_socket.send('e')
                 enable_flag_sent = True
             input_rects = metadata_socket.recv(2048)
+            rect_size = input_rects[0] << 8 + input_rects[1]
+            rects = []
+            for i in range(0, rect_size):
+                x = input_rects[i * 24 + 1] << 8 + input_rects[i * 24 + 2]
+                y = input_rects[i * 24 + 3] << 8 + input_rects[i * 24 + 4]
+                w = input_rects[i * 24 + 5] << 8 + input_rects[i * 24 + 6]
+                h = input_rects[i * 24 + 7] << 8 + input_rects[i * 24 + 8]
+                rects.append((x, y, w, h))
+            sorted_rects = sorted(rects, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]), reverse=True)
+            biggest_rect = sorted_rects[0]
+            x, y, w, h = biggest_rect
+            cx = image_resolution[0] / 2
+            cy = image_resolution[1] / 2
+            if x <= cx <= x + w and y <= cy <= y + h:
+                uart.write('p')
+                pump_on = True
+            elif pump_on:
+                uart.write('s')
+                pump_on = False
 
-
+            command = ''
+            if cy <= y:
+                command += gun_up
+            elif cy >= y + h:
+                command += gun_down
+            if cx <= x:
+                command += gun_right
+            else:
+                command += gun_left
+            uart.write(command)
         else:
             if enable_flag_sent:
                 state_socket.send('s')
@@ -77,36 +119,17 @@ if __name__ == '__main__':
         uart = serial.Serial("/dev/ttyACM0", 9600)
         settings = json.load(open(json_file_path, 'r'))
         gamepad_conn = connect_to_gamepad(settings)
-        proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state))
+        image_resolution = (settings['im_width'], settings['im_height'])
+        proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
         while 1:
             com = gamepad_conn.recv(1)
-            if com is '0':
-                # activate autogun
-            elif com is '1':
-                # moving forward
-            elif com is '2':
-                # moving backward
-            elif com is '3':
-                # rotate robot right
-            elif com is '4':
-                # rotate robot left
-            elif com is '5':
-                # gun up
-            elif com is '6':
-                # gun down
-            elif com is '7':
-                # gun left
-            elif com is '8':
-                # gun right
-            elif com is 'p':
-                # pump on
-            elif com is 's':
-                # stop
-
-            if com is not '0':
-                # stop autogun
-
-            if com is 'e':
+            if com is firedet_en:
+                kernel_proc_state = True
+            else:
+                kernel_proc_state = False
+            uart.write(com)
+            if com is power_off:
+                kernel_agent_work = False
                 break
 
         disconnect()
