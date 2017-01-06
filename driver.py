@@ -114,27 +114,20 @@ def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
 
 if __name__ == '__main__':
     json_file_path, cvkernel_comm, cvkernel_args = parse_args()
-    cvkernel_pid = os.fork()
-    if cvkernel_pid > 0:
-        uart = serial.Serial("/dev/ttyACM0", 9600)
-        settings = json.load(open(json_file_path, 'r'))
-        gamepad_conn = connect_to_gamepad(settings)
-        image_resolution = (settings['im_width'], settings['im_height'])
-        proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
-        while 1:
-            com = gamepad_conn.recv(1)
-            if com is firedet_en:
-                kernel_proc_state = True
-            else:
-                kernel_proc_state = False
-            uart.write(com)
-            if com is power_off:
-                kernel_agent_work = False
-                break
+    uart = serial.Serial("/dev/ttyACM0", 9600)
+    settings = json.load(open(json_file_path, 'r'))
+    gamepad_conn = connect_to_gamepad(settings)
+    image_resolution = (settings['im_width'], settings['im_height'])
+    proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
+    while 1:
+        com = gamepad_conn.recv(1)
+        if com is firedet_en:
+            kernel_proc_state = True
+        else:
+            kernel_proc_state = False
+        uart.write(com)
+        if com is power_off:
+            kernel_agent_work = False
+            break
 
-        disconnect()
-        os.kill(cvkernel_pid, 9)
-    elif cvkernel_pid == 0:
-        os.execv(cvkernel_comm, cvkernel_args)  #child
-    elif cvkernel_pid == -1:
-        print 'cannot create new process'
+    gamepad_conn.close()
