@@ -29,13 +29,16 @@ def connect_to_cvkernel_state_sock(settings):
     sock.connect(settings['state_unix_dst'])
     return sock
 
+
 def create_metadata_udp_server(settings):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
     sock.bind(localhost, settings['meta_udp_port'])
     return sock
 
+
 def connect_to_cvkernel(settings):
     return connect_to_cvkernel_state_sock(settings), create_metadata_udp_server(settings)
+
 
 def connect_to_gamepad(settings):
     sock = socket.socket()
@@ -44,8 +47,10 @@ def connect_to_gamepad(settings):
     sock.connect(serv_addr, settings['gamepad_tcp_port'])
     return sock
 
+
 def disconnect():
     return
+
 
 def parse_args():
     cvkernel_command = 'CVKernel'
@@ -63,11 +68,39 @@ def parse_args():
 
     return json_file_path, cvkernel_command, cvkernel_args
 
+
+def rect_area(rect):
+    return rect[2] * rect[3]
+
+def rect_int(rect1, rect2):
+    r1_x, r1_y, r1_w, r1_h = rect1
+    r2_x, r2_y, r2_w, r2_h = rect2
+    x1 = max(r1_x, r2_x)
+    y1 = max(r1_y, r2_y)
+    x2 = min(r1_x + r1_w, r2_x + r2_w)
+    y2 = min(r1_y + r1_h, r2_y + r2_h)
+    if x1 >= x2 or y1 >= y2:
+        return 0, 0, 0, 0
+    else:
+        return x1, y1, x2 - x1, y2 - y1
+
+
+def near_rect_metric(rect, biggest_rect):
+    int_rect = rect_int(rect, biggest_rect)
+    int_area = rect_area(int_rect)
+    big_area = rect_area(biggest_rect)
+    if int_area > 0:
+        return 1. + int_area / big_area
+    else:
+        return rect_area(rect) / big_area
+
+
 def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
     enable_flag_sent = False
     pump_on = False
     state_socket, metadata_socket = connect_to_cvkernel(settings)
     pump_time = 0
+    biggest_rect = None
     while agent_work:
         if proc_state:
             if not enable_flag_sent:
@@ -82,7 +115,7 @@ def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
                 w = input_rects[i * 24 + 5] << 8 + input_rects[i * 24 + 6]
                 h = input_rects[i * 24 + 7] << 8 + input_rects[i * 24 + 8]
                 rects.append((x, y, w, h))
-            sorted_rects = sorted(rects, key=lambda r: (r[2] - r[0]) * (r[3] - r[1]), reverse=True)
+            sorted_rects = sorted(rects, key=lambda r: r[2] * r[3] if biggest_rect is None else near_rect_metric(r, biggest_rect), reverse=True)
             biggest_rect = sorted_rects[0]
             x, y, w, h = biggest_rect
             cx = image_resolution[0] / 2
@@ -108,14 +141,14 @@ def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
             else:
                 command += gun_left
             uart.write(command)
-        else:
-            if enable_flag_sent:
-                state_socket.send('s')
-                enable_flag_sent = False
+        elif enable_flag_sent:
+            state_socket.send('s')
+            enable_flag_sent = False
     state_socket.send('c')
     state_socket.close()
     metadata_socket.close()
     return
+
 
 if __name__ == '__main__':
     json_file_path, cvkernel_comm, cvkernel_args = parse_args()
@@ -126,10 +159,7 @@ if __name__ == '__main__':
     proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
     while 1:
         com = gamepad_conn.recv(1)
-        if com is firedet_en:
-            kernel_proc_state = True
-        else:
-            kernel_proc_state = False
+        kernel_proc_state = com is firedet_en
         uart.write(com)
         if com is power_off:
             kernel_agent_work = False
