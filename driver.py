@@ -67,6 +67,7 @@ def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
     enable_flag_sent = False
     pump_on = False
     state_socket, metadata_socket = connect_to_cvkernel(settings)
+    pump_time = 0
     while agent_work:
         if proc_state:
             if not enable_flag_sent:
@@ -89,9 +90,13 @@ def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
             if x <= cx <= x + w and y <= cy <= y + h:
                 uart.write('p')
                 pump_on = True
+                pump_time = 0
             elif pump_on:
-                uart.write('s')
-                pump_on = False
+                if pump_time > 60:
+                    uart.write('s')
+                    pump_on = False
+                else:
+                    pump_time += 1
 
             command = ''
             if cy <= y:
