@@ -1,0 +1,34 @@
+{
+  "file_input": "../videos/fire1i7.mp4",
+  "file_output": "../videos/overlay1i7.avi",
+  "process": [{
+      "node": "r_firemm",
+      "children": [{
+        "node": "fire_valid",
+        "children": [{
+          "node": "fire_bbox",
+          "children": [{
+            "node": "fire_weights",
+            "draw_overlay": true,
+            "children": [{
+              "node": "flame_src_bbox",
+              "draw_overlay": true,
+              "ip_deliver": true,
+              "children": []
+            }]          
+          }]
+        }]
+      }]
+  }],
+  "show_overlay": false,
+  "store_output": true,
+  "frame_width": 320,
+  "frame_height": 182,
+  
+  "meta_udp_address": "127.0.0.1",
+  "meta_udp_port": 7777,
+
+  "state_unix_dst": "/etc/cvkernel_state.sock",
+
+  "gamepad_tcp_port": 8989
+}

@@ -43,8 +43,8 @@ def connect_to_cvkernel(settings):
 def connect_to_gamepad(settings):
     sock = socket.socket()
     self_addr = netifaces.ifaddresses('wlan0')[netifaces.AF_INET][0]['addr']
-    serv_addr = self_addr[:self_addr.rfind('.')] + '1'
-    sock.connect(serv_addr, settings['gamepad_tcp_port'])
+    serv_addr = self_addr[:self_addr.rfind('.') + 1] + '1'
+    sock.connect((serv_addr, settings['gamepad_tcp_port']))
     return sock
 
 
@@ -55,7 +55,7 @@ def disconnect():
 def parse_args():
     cvkernel_command = 'CVKernel'
     cvkernel_args = ['off']
-    if sys.argc > 1:
+    if len(sys.argv) > 1:
         if sys.argv[1] is 'pi':
             json_file_path = 'fire_overlay_off_rpi.json'
             cvkernel_args.append('rpi')
@@ -95,7 +95,7 @@ def near_rect_metric(rect, biggest_rect):
         return rect_area(rect) / big_area
 
 
-def cvkernel_agent(uart, proc_state, agent_work, image_resolution):
+def cvkernelagent(uart, proc_state, agent_work, image_resolution):
     enable_flag_sent = False
     pump_on = False
     state_socket, metadata_socket = connect_to_cvkernel(settings)
@@ -155,8 +155,8 @@ if __name__ == '__main__':
     uart = serial.Serial("/dev/ttyACM0", 9600)
     settings = json.load(open(json_file_path, 'r'))
     gamepad_conn = connect_to_gamepad(settings)
-    image_resolution = (settings['im_width'], settings['im_height'])
-    proc = multiprocessing.Process(target=cvkernel_agent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
+    image_resolution = (settings['frame_width'], settings['frame_height'])
+    proc = multiprocessing.Process(target=cvkernelagent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
     while 1:
         com = gamepad_conn.recv(1)
         kernel_proc_state = com is firedet_en
