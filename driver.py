@@ -21,18 +21,23 @@ gun_left = '7' # gun left
 gun_right = '8' # gun right
 pump_on = 'p' # pump on
 stop = 's'
-power_off = 'e'
+power_off = 'z'
+cvproc_enabled = 'e'
+cvproc_disabled = stop
+
+localhost = '127.0.0.1'
 
 
 def connect_to_cvkernel_state_sock(settings):
-    sock = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-    sock.connect(settings['state_unix_dst'])
+    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    sock.connect((localhost, settings['state_tcp_port']))
+    print 'TCP: connected to cvkernel'
     return sock
 
 
 def create_metadata_udp_server(settings):
     sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-    sock.bind(localhost, settings['meta_udp_port'])
+    sock.bind((localhost, settings['meta_udp_port']))
     return sock
 
 
@@ -45,6 +50,7 @@ def connect_to_gamepad(settings):
     self_addr = netifaces.ifaddresses('wlan0')[netifaces.AF_INET][0]['addr']
     serv_addr = self_addr[:self_addr.rfind('.') + 1] + '1'
     sock.connect((serv_addr, settings['gamepad_tcp_port']))
+    print 'TCP: connected to gamepad'
     return sock
 
 
@@ -71,6 +77,7 @@ def parse_args():
 
 def rect_area(rect):
     return rect[2] * rect[3]
+
 
 def rect_int(rect1, rect2):
     r1_x, r1_y, r1_w, r1_h = rect1
@@ -104,7 +111,7 @@ def cvkernelagent(uart, proc_state, agent_work, image_resolution):
     while agent_work:
         if proc_state:
             if not enable_flag_sent:
-                state_socket.send('e')
+                state_socket.send(cvproc_enabled)
                 enable_flag_sent = True
             input_rects = metadata_socket.recv(2048)
             rect_size = input_rects[0] << 8 + input_rects[1]
@@ -121,12 +128,12 @@ def cvkernelagent(uart, proc_state, agent_work, image_resolution):
             cx = image_resolution[0] / 2
             cy = image_resolution[1] / 2
             if x <= cx <= x + w and y <= cy <= y + h:
-                uart.write('p')
+                uart.write(pump_on)
                 pump_on = True
                 pump_time = 0
             elif pump_on:
                 if pump_time > 60:
-                    uart.write('s')
+                    uart.write(stop)
                     pump_on = False
                 else:
                     pump_time += 1
@@ -142,9 +149,8 @@ def cvkernelagent(uart, proc_state, agent_work, image_resolution):
                 command += gun_left
             uart.write(command)
         elif enable_flag_sent:
-            state_socket.send('s')
+            state_socket.send(cvproc_disabled)
             enable_flag_sent = False
-    state_socket.send('c')
     state_socket.close()
     metadata_socket.close()
     return
@@ -157,6 +163,7 @@ if __name__ == '__main__':
     gamepad_conn = connect_to_gamepad(settings)
     image_resolution = (settings['frame_width'], settings['frame_height'])
     proc = multiprocessing.Process(target=cvkernelagent, args=(uart, kernel_proc_state, kernel_agent_work, image_resolution))
+    proc.start()
     while 1:
         com = gamepad_conn.recv(1)
         kernel_proc_state = com is firedet_en
@@ -166,4 +173,5 @@ if __name__ == '__main__':
             kernel_agent_work = False
             break
 
+    proc.join()
     gamepad_conn.close()

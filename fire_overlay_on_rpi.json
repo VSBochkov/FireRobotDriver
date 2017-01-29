@@ -28,7 +28,7 @@
   "meta_udp_address": "127.0.0.1",
   "meta_udp_port": 7777,
 
-  "state_unix_dst": "/etc/cvkernel_state.sock",
+  "state_tcp_port": 7778,
 
   "gamepad_tcp_port": 8989
 }
