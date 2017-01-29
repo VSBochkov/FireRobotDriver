@@ -160,6 +160,7 @@ if __name__ == '__main__':
     while 1:
         com = gamepad_conn.recv(1)
         kernel_proc_state = com is firedet_en
+        print 'command is {}'.format(com)
         uart.write(com)
         if com is power_off:
             kernel_agent_work = False
