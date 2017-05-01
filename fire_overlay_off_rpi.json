@@ -1,22 +1,22 @@
 {
-  "file_input": "../videos/fire4rpi.mp4",
-  "file_output": "../videos/overlay4rpi.avi",
+  "input_path": "../videos/fire4rpi.mp4",
+  "output_path": "../videos/overlay4rpi.avi",
   "process": [{
-      "node": "r_firemm",
+    "node": "r_firemm",
+    "children": [{
+      "node": "fire_valid",
       "children": [{
-        "node": "fire_valid",
+        "node": "fire_bbox",
         "children": [{
-          "node": "fire_bbox",
+          "node": "fire_weights",
           "children": [{
-            "node": "fire_weights",
-            "children": [{
-              "node": "flame_src_bbox",
-              "ip_deliver": true,
-              "children": []
-            }]          
+            "node": "flame_src_bbox",
+            "ip_deliver": true,
+            "children": []
           }]
         }]
       }]
+    }]
   }],
   "show_overlay": false,
   "store_output": true,

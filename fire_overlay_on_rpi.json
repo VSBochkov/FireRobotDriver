@@ -1,6 +1,6 @@
 {
-  "file_input": "../videos/fire1rpi.mp4",
-  "file_output": "../videos/overlay1rpi.avi",
+  "input_path": "../videos/fire1rpi.mp4",
+  "output_path": "../videos/overlay1rpi.avi",
   "process": [{
       "node": "r_firemm",
       "children": [{
@@ -20,12 +20,11 @@
         }]
       }]
   }],
-  "show_overlay": false,
+  "cvkernel_mac": "6c:71:d9:5c:5e:f3",
   "store_output": true,
   "frame_width": 200,
   "frame_height": 112,
-  
-  "meta_udp_address": "127.0.0.1",
+
   "meta_udp_port": 7777,
 
   "state_tcp_port": 7778,

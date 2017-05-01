@@ -1,4 +1,3 @@
-#include <BTCA2A.h>
 #include <Servo.h>
 #include <Multiservo.h>
 #include <Wire.h>
@@ -39,8 +38,6 @@ Servo back_left;
 Servo back_right;
 Servo gun_xy;
 Servo gun_z;
-unsigned char CS = 9, SO = 11, SCK_ = 13;
-btca2a bluetooth;
 double gun_xy_ang;
 double gun_z_ang;
 unsigned long cnt_max = 1600000;
@@ -57,10 +54,13 @@ String robot_forw = "1",
        gun_right = "8",
        pump_on = "p",
        stop = "s",
-       power_off = "e";
+       power_off = "e",
+       auto_gun = "a";
 
 double kGun_xy = 1., kGun_z = -1.;
 unsigned char drive_sm;
+unsigned char auto_gun = 0;
+int pump = LOW;
 unsigned char purpose_command();
 void doing_command();
 void stop_servo(Servo *servo);
@@ -98,18 +98,22 @@ void loop() {
 unsigned char purpose_command()
 {
   while(Serial.available())
-    command += (char)Serial.read();
-  
+    command = (char)Serial.read();
+
   if (command.equal(robot_forw)) {
+     auto_gun = 0;
      return DRIVE_FULL_FORW;
   }
   else if (command.equal(robot_back)) {
+     auto_gun = 0;
      return DRIVE_FULL_BACK;
   }
   else if (command.equal(robot_left)) {
+     auto_gun = 0;
      return DRIVE_LEFT;
   }
   else if (command.equal(robot_right)) {
+     auto_gun = 0;
      return DRIVE_RIGHT;
   }
   else if (command.equal(gun_up)) {
@@ -134,17 +138,15 @@ unsigned char purpose_command()
   }
   else if(command.equal(pump_on))
     return PUMP_ON;
-  else
+  else {
+    auto_gun = 0;
     return DRIVE_STOP;
+  }
 }
 
 void doing_command()
 {
   int cfr = SERVO_STOP, cfl = SERVO_STOP, cbr = SERVO_STOP, cbl = SERVO_STOP;
-  int pump = LOW;
-  
-  if (auto_pump == PUMP_ON)
-    pump = HIGH;
     
   switch(drive_sm) {
     case DRIVE_FULL_FORW: 
@@ -188,34 +190,55 @@ void doing_command()
     case GUN_UP:
     {
       gun_z_ang += kGun_z * 0.01;
+      if (auto_gun == 1) {
+          gun_z_ang += 0.25;
+          drive_sm = DRIVE_STOP;
+      } else {
+          gun_z_ang += kGun_z * 0.01;
+      }
       gun_z.write(gun_z_ang);
       delay(1);
       break;
     }
     case GUN_DOWN:
     {
-      gun_z_ang -= kGun_z * 0.01;
+      if (auto_gun == 1) {
+          gun_z_ang -= 0.25;
+          drive_sm = DRIVE_STOP;
+      } else {
+          gun_z_ang -= kGun_z * 0.01;
+      }
       gun_z.write(gun_z_ang);
       delay(1);
       break;
     }
     case GUN_LEFT:
     {
-      gun_xy_ang += kGun_xy * 0.01;
+      if (auto_gun == 1) {
+          gun_xy_ang += 0.5;
+          drive_sm = DRIVE_STOP;
+      } else {    
+          gun_xy_ang += kGun_xy * 0.01;
+      }
       gun_xy.write(gun_xy_ang);
       delay(1);
       break;
     }
     case GUN_RIGHT:
     {
-      gun_xy_ang -= kGun_xy * 0.01;
+      if (auto_gun == 1) {
+          gun_xy_ang -= 0.5;
+          drive_sm = DRIVE_STOP;
+      } else {    
+          gun_xy_ang -= kGun_xy * 0.01;
+      }
       gun_xy.write(gun_xy_ang);
       delay(1);
       break;
     }
     case PUMP_ON:
     {
-      pump = HIGH;
+      pump = pump == HIGH ? LOW : HIGH;
       break;
     }
   }

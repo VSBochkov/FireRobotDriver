@@ -1,6 +1,6 @@
 {
-  "file_input": "../videos/fire4i7.mp4",
-  "file_output": "../videos/overlay4i7.avi",
+  "input_path": "../videos/fire4i7.mp4",
+  "output_path": "../videos/overlay4i7.avi",
   "process": [{
       "node": "r_firemm",
       "children": [{
@@ -25,8 +25,6 @@
   
   "meta_udp_address": "127.0.0.1",
   "meta_udp_port": 7777,
-
-  "state_tcp_port": 7778,
 
   "gamepad_tcp_port": 8989
 }
