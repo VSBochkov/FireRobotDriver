@@ -59,7 +59,7 @@ String robot_forw = "1",
 
 double kGun_xy = 1., kGun_z = -1.;
 unsigned char drive_sm;
-unsigned char auto_gun = 0;
+unsigned char auto_gun_state = 0;
 int pump = LOW;
 unsigned char purpose_command();
 void doing_command();
@@ -91,29 +91,29 @@ void loop() {
   
   if(Serial.available()) {
     drive_sm = purpose_command();
-    doing_command();
   }
+  doing_command();
+  delay(1);
 }
 
 unsigned char purpose_command()
 {
-  while(Serial.available())
-    command = (char)Serial.read();
+  command = (char)Serial.read();
 
+  if (command.equal(auto_gun)) {
+     auto_gun_state = auto_gun_state == 0 ? 1 : 0;
+     return DRIVE_STOP;
+  }
   if (command.equal(robot_forw)) {
-     auto_gun = 0;
      return DRIVE_FULL_FORW;
   }
   else if (command.equal(robot_back)) {
-     auto_gun = 0;
      return DRIVE_FULL_BACK;
   }
   else if (command.equal(robot_left)) {
-     auto_gun = 0;
      return DRIVE_LEFT;
   }
   else if (command.equal(robot_right)) {
-     auto_gun = 0;
      return DRIVE_RIGHT;
   }
   else if (command.equal(gun_up)) {
@@ -138,9 +138,6 @@ unsigned char purpose_command()
   }
   else if(command.equal(pump_on))
     return PUMP_ON;
-  else {
-    auto_gun = 0;
-    return DRIVE_STOP;
   }
 }
 
@@ -189,51 +186,46 @@ void doing_command()
     }
     case GUN_UP:
     {
-      gun_z_ang += kGun_z * 0.01;
-      if (auto_gun == 1) {
+      if (auto_gun_state == 1) {
           gun_z_ang += 0.25;
           drive_sm = DRIVE_STOP;
       } else {
           gun_z_ang += kGun_z * 0.01;
       }
       gun_z.write(gun_z_ang);
-      delay(1);
       break;
     }
     case GUN_DOWN:
     {
-      if (auto_gun == 1) {
+      if (auto_gun_state == 1) {
           gun_z_ang -= 0.25;
           drive_sm = DRIVE_STOP;
       } else {
           gun_z_ang -= kGun_z * 0.01;
       }
       gun_z.write(gun_z_ang);
-      delay(1);
       break;
     }
     case GUN_LEFT:
     {
-      if (auto_gun == 1) {
+      if (auto_gun_state == 1) {
           gun_xy_ang += 0.5;
           drive_sm = DRIVE_STOP;
       } else {    
           gun_xy_ang += kGun_xy * 0.01;
       }
       gun_xy.write(gun_xy_ang);
-      delay(1);
       break;
     }
     case GUN_RIGHT:
     {
-      if (auto_gun == 1) {
+      if (auto_gun_state == 1) {
           gun_xy_ang -= 0.5;
           drive_sm = DRIVE_STOP;
       } else {    
           gun_xy_ang -= kGun_xy * 0.01;
       }
       gun_xy.write(gun_xy_ang);
-      delay(1);
       break;
     }
     case PUMP_ON:

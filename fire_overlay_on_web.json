@@ -1,5 +1,5 @@
 {
-  "input_path": "../videos/fire2i7.mp4",
+  "input_device": 1,
   "fake_output_p": "file:./overFire222i7.avi",
   "output_path": "udp:5656/overlay2i7.avi",
   "process": [{
@@ -20,8 +20,9 @@
           }]
       }]
   }],
-  "proc_resolution": "320x182",
-  "fps": 29.97,
+  "proc_resolution": "176x144",
+  "fps": 30,
   "meta_udp_port": 7777,
-  "state_tcp_port": 7778
+  "state_tcp_port": 7778,
+  "gamepad_tcp_port": 8989
 }

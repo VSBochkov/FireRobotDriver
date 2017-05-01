@@ -1,8 +1,11 @@
 import serial
 import json
 import multiprocessing
+import Queue
+import os
+import math
 
-from cv_kernel import cv_connector
+from cv_kernel import cv_client
 from cv_kernel import cv_network_controller
 
 '''
@@ -204,7 +207,11 @@ if __name__ == '__main__':
 
 
 class FireRobotDriver:
-    firedet_en = '0'  # activate autogun
+    autogun_on = 1
+    autogun_off = 2
+    client_closed = 3
+    meta = 4
+    gamepad_found = 5
     robot_forw = '1'  # moving forward
     robot_back = '2'  # moving backward
     robot_right = '3'  # rotate robot right
@@ -215,52 +222,57 @@ class FireRobotDriver:
     gun_right = '8'  # gun right
     pump_on = 'p'  # pump on
     stop = 's'
+    autogun = 'a'  # activate autogun
     power_off = 'z'
     cvproc_enabled = 'e'
 
-    def __init__(self, network_controller, fire_robot_driver_settings):
-        self.cv_client = cv_client.cv_client(network_controller,
-                                             'cv_kernel_settings.json',
-                                             self.__client_run,
-                                             self.__client_ready,
-                                             self.__client_closed,
-                                             self.metadata_receiver,
-                                             self,
-                                             'fire_overlay_on_pc.json')
-
-        self.client = cv_client(
-            network_controller=cv_network_controller(),
-            cvkernel_json_path='/home/vbochkov/workspace/development/CVKernel/cv_kernel_settings.json',
-            run_state_handler=self.test_on_run,
-            ready_state_handler=self.test_on_ready,
-            closed_state_handler=self.test_on_closed,
-            meta_handler=self.meta_handler,
-            cvproc_json_path='/home/vbochkov/workspace/development/FireRobotDriver/fire_overlay_on_pc.json'
+    def __init__(self):
+        self.driver_queue = multiprocessing.Queue()
+        self.driver = multiprocessing.Process(target=self.__driver)
+        fire_robot_driver_path = os.environ.get('FIRE_ROBOT_DRIVER_PATH')
+        self.gamepad_settings = json.load(open(fire_robot_driver_path + '/gamepad.json', 'r'))
+        self.network_controller = cv_network_controller(self.__gamepad_found)
+        self.network_controller.add_mac_handler(self.gamepad_settings['mac_address'])
+        self.cv_client = cv_client(
+            network_controller=self.network_controller,
+            cvkernel_json_path=fire_robot_driver_path + '/cv_kernel_settings.json',
+            run_state_handler=self.__vproc_run,
+            ready_state_handler=self.__vproc_ready,
+            closed_state_handler=self.__vproc_closed,
+            meta_handler=self.__metadata_received,
+            cvproc_json_path=fire_robot_driver_path + '/fire_overlay_on_pc.json'
         )
 
-        self.image_resolution = (
-            self.cv_client.cv_process_description['frame_width'],
-            self.cv_client.cv_process_description['frame_height']
-        )
-        self.driver_settings = json.load(open(fire_robot_driver_settings), 'r')
-        self.network_controller = network_controller
-        self.network_controller.add_mac_handler(self.driver_settings['mac_address'], self.__gamepad_found, self)
-
-    def __gamepad_found(self, ip_address):
-        self.tcp_socket = cv_network_controller.connect_to_tcp_host(ip_address, self.driver_settings['tcp_port'])
-        self.driver = multiprocessing.Process(target=self.__driver, args=self)
-        self.driver_run = multiprocessing.Value('b', 1)
-        self.driver_mtx = multiprocessing.RLock()
+        resolution = tuple(self.cv_client.cv_process_description['proc_resolution'].split('x'))
+        self.image_resolution = int(resolution[0]), int(resolution[1])
+        self.fps = float(self.cv_client.cv_process_description['fps'])
         self.uart = serial.Serial("/dev/ttyACM0", 9600)
+        self.gamepad_tcp = None
+        self.biggest_rect = None
+        self.ema_aimed = 0.
+        self.ema_left = 0.
+        self.ema_right = 0.
+        self.ema_up = 0.
+        self.ema_down = 0.
+        self.aimed_thresh = 0.7
+        self.move_thresh = 0.7
+        self.pump_active = False
+        self.qfps = self.fps / 4
+        self.meta_iteration = 0
+        self.quater_second = math.ceil(self.qfps)
+        self.driver.run()
 
-    def __client_run(self):
-        print 'Autogun activated'
+    def __gamepad_found(self, mac, ip_address):
+        self.driver_queue.put({'type': FireRobotDriver.gamepad_found, 'ip_address': ip_address})
 
-    def __client_ready(self):
-        print 'Autogun inactive'
+    def __vproc_run(self):
+        self.driver_queue.put({'type': FireRobotDriver.autogun_on})
 
-    def __client_closed(self):
-        pass
+    def __vproc_ready(self):
+        self.driver_queue.put({'type': FireRobotDriver.autogun_off})
+
+    def __vproc_closed(self):
+        self.driver_queue.put({'type': FireRobotDriver.client_closed})
 
     @staticmethod
     def __rect_area(rect):
@@ -273,9 +285,9 @@ class FireRobotDriver:
         x2 = min(r1['x'] + r1['w'], r2['x'] + r2['w'])
         y2 = min(r1['y'] + r1['h'], r2['y'] + r2['h'])
         if x1 >= x2 or y1 >= y2:
-            return 0, 0, 0, 0
+            return {'x': 0, 'y': 0, 'w': 0, 'h': 0}
         else:
-            return x1, y1, x2 - x1, y2 - y1
+            return {'x': x1, 'y': y1, 'w': x2 - x1, 'h': y2 - y1}
 
     def __near_rect_metric(self, rect):
         int_rect = FireRobotDriver.__rect_int(rect, self.biggest_rect)
@@ -291,20 +303,79 @@ class FireRobotDriver:
         max_metric = 0.
         if self.biggest_rect is None:
             for rect in rects:
-                metric = rect['w'] * rect['h']
+                metric = FireRobotDriver.__rect_area(rect)
                 if max_metric < metric:
                     max_metric = metric
                     biggest_rect = rect
         else:
             for rect in rects:
-                metric = self.__near_rect_metric(r)
+                metric = self.__near_rect_metric(rect)
                 if max_metric < metric:
                     max_metric = metric
                     biggest_rect = rect
 
         return biggest_rect
 
-    def __metadata_received(self, packet):
+    def __metadata_received(self, metadata):
+        self.driver_queue.put({'type': FireRobotDriver.meta, 'meta': metadata})
+
+    def __drive_gun(self, meta):
+        if 'FlameSrcBBox' not in meta.keys():
+            self.ema_aimed = (self.ema_aimed * self.fps) / float(self.fps + 1.)
+            self.ema_up = (self.ema_up * self.qfps) / float(self.qfps + 1.)
+            self.ema_down = (self.ema_down * self.qfps) / float(self.qfps + 1.)
+            self.ema_left = (self.ema_left * self.qfps) / float(self.qfps + 1.)
+            self.ema_right = (self.ema_right * self.qfps) / float(self.qfps + 1.)
+            return
+        print 'meta[FlameSrcBBox] is {}'.format(meta['FlameSrcBBox'])
+        self.meta_iteration += 1
+        rects = meta['FlameSrcBBox']['bboxes']
+        self.biggest_rect = self.__get_biggest_rect(rects)
+        if self.biggest_rect is None:
+            self.ema_aimed = (self.ema_aimed * self.fps) / float(self.fps + 1.)
+            self.ema_up = (self.ema_up * self.qfps) / float(self.qfps + 1.)
+            self.ema_down = (self.ema_down * self.qfps) / float(self.qfps + 1.)
+            self.ema_left = (self.ema_left * self.qfps) / float(self.qfps + 1.)
+            self.ema_right = (self.ema_right * self.qfps) / float(self.qfps + 1.)
+            return
+
+        x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
+        cx = self.image_resolution[0] / 2
+        cy = self.image_resolution[1] / 2
+        aimed = int(x <= cx <= x + w and y - h <= cy <= y)          # y is reverted [0 at top, frame height at bottom]
+        self.ema_aimed = float(self.ema_aimed * self.fps + aimed) / float(self.fps + 1.)
+        command = ''
+        if self.ema_aimed >= self.aimed_thresh and not self.pump_active:
+            command += FireRobotDriver.pump_on
+            self.pump_active = True
+        elif self.ema_aimed < self.aimed_thresh and self.pump_active:
+            command += FireRobotDriver.pump_on
+            self.pump_active = False
+
+        self.ema_up = float(self.ema_up * self.qfps + int(cy <= y - h)) / (self.qfps + 1)
+        self.ema_down = float(self.ema_down * self.qfps + int(cy >= y)) / (self.qfps + 1)
+        self.ema_right = float(self.ema_right * self.qfps + int(cx <= x)) / (self.qfps + 1)
+        self.ema_left = float(self.ema_left * self.qfps + int(cx >= x + w)) / (self.qfps + 1)
+
+        if self.meta_iteration == self.quater_second:
+            if self.ema_up > self.move_thresh or self.ema_down > self.move_thresh:
+                command += FireRobotDriver.gun_up if self.ema_up > self.ema_down else FireRobotDriver.gun_down
+            elif self.ema_left > self.move_thresh or self.ema_right > self.move_thresh:
+                command += FireRobotDriver.gun_left if self.ema_left > self.ema_right else FireRobotDriver.gun_right
+            self.meta_iteration = 0
+
+        print 'iteration = {}'.format(self.meta_iteration)
+        print 'target bbox: {}'.format(self.biggest_rect)
+        print 'ema: aimed = {}, up = {}, down = {}, left = {}, right = {}'.format(
+            self.ema_aimed, self.ema_up, self.ema_down, self.ema_left, self.ema_right
+        )
+        print 'command is {}'.format(command)
+
+        if len(command) > 0:
+            self.uart.write(command)
+
+
+    '''def __drive_gun(self, packet):
         rects = packet['FlameSrcBBox']['bboxes']
         self.biggest_rect = self.__get_biggest_rect(rects)
         x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
@@ -330,21 +401,57 @@ class FireRobotDriver:
             command += FireRobotDriver.gun_right
         else:
             command += FireRobotDriver.gun_left
-        self.uart.write(command)
+        self.uart.write(command)'''
 
     def __driver(self):
-        while True:
-            with self.driver_mtx:
-                if self.driver_run == 0:
-                    return
+        client_was_run = False
+        autogun_run = False
+        driver_running = True
+        while driver_running:
+            try:
+                packet = self.driver_queue.get_nowait()
+            except Queue.Empty:
+                pass
+            else:
+                if packet['type'] == FireRobotDriver.gamepad_found:
+                    self.gamepad_tcp = cv_network_controller.connect_to_tcp_host(
+                        packet['ip_address'], self.gamepad_settings['port']
+                    )
+                    print 'gamepad connected'
+                elif packet['type'] == FireRobotDriver.autogun_on:
+                    print 'Autogun active'
+                    autogun_run = True
+                    client_was_run = True
+                elif packet['type'] == FireRobotDriver.autogun_off:
+                    print 'Autogun inactive'
+                    autogun_run = False
+                    self.biggest_rect = None
+                elif packet['type'] == FireRobotDriver.meta and autogun_run:
+                    self.__drive_gun(packet['meta'])
+                elif packet['type'] == FireRobotDriver.client_closed:
+                    print 'cv_client closed'
+                    if client_was_run:
+                        driver_running = False
+                        client_was_run = False
+            finally:
+                if self.gamepad_tcp is not None:
+                    command = cv_network_controller.async_receive_byte(self.gamepad_tcp)
+                    if command is not None:
+                        print 'command is: {}'.format(command)
+                        if command == FireRobotDriver.autogun:
+                            if autogun_run:             # autogun was activated
+                                print 'stop autogun'
+                                self.cv_client.stop()   # stop autogun
+                            else:                       # autogun was not activated
+                                print 'run autogun'
+                                self.cv_client.run()    # run autogun
+                        self.uart.write(command)
+        self.network_controller.stop()
+        print 'exit from __driver'
 
-                packet = cv_network_controller.receive_packet(self.tcp_socket)
-                command = packet['command']
-                if command == FireRobotDriver.firedet_en:
-                    self.cv_client.run()
-                else:
-                    self.cv_client.stop()
-                    self.uart.write(command)
 
-                if command is FireRobotDriver.power_off:
-                    self.driver_run = 0
+def run():
+    FireRobotDriver()
+
+if __name__ == '__main__':
+    run()

@@ -1,33 +1,27 @@
 {
-  "input_path": "../videos/fire1rpi.mp4",
-  "output_path": "../videos/overlay1rpi.avi",
+  "input_path": "../videos/fire2i7.mp4",
+  "fake_output_p": "file:./overFire222i7.avi",
+  "output_path": "udp:5656/overlay2i7.avi",
   "process": [{
-      "node": "r_firemm",
+      "node": "RFireMaskingModel",
       "children": [{
-        "node": "fire_valid",
-        "children": [{
-          "node": "fire_bbox",
+          "node": "FireValidation",
           "children": [{
-            "node": "fire_weights",
-            "draw_overlay": true,
-            "children": [{
-              "node": "flame_src_bbox",
-              "draw_overlay": true,
-              "ip_deliver": true,
-              "children": []
-            }]          
+              "node": "FireBBox",
+              "children": [{
+                  "node": "FireWeightDistrib",
+                  "draw_overlay": false,
+                  "children": [{
+                      "node": "FlameSrcBBox",
+                      "draw_overlay": true,
+                      "children": []
+                  }]
+              }]
           }]
-        }]
       }]
   }],
-  "cvkernel_mac": "6c:71:d9:5c:5e:f3",
-  "store_output": true,
-  "frame_width": 200,
-  "frame_height": 112,
-
+  "proc_resolution": "200x112",
+  "fps": 29.97,
   "meta_udp_port": 7777,
-
-  "state_tcp_port": 7778,
-
-  "gamepad_tcp_port": 8989
+  "state_tcp_port": 7778
 }
