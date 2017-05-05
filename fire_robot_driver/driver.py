@@ -327,7 +327,6 @@ class FireRobotDriver:
             self.ema_left = (self.ema_left * self.qfps) / float(self.qfps + 1.)
             self.ema_right = (self.ema_right * self.qfps) / float(self.qfps + 1.)
             return
-        print 'meta[FlameSrcBBox] is {}'.format(meta['FlameSrcBBox'])
         self.meta_iteration += 1
         rects = meta['FlameSrcBBox']['bboxes']
         self.biggest_rect = self.__get_biggest_rect(rects)
@@ -414,6 +413,7 @@ class FireRobotDriver:
                 pass
             else:
                 if packet['type'] == FireRobotDriver.gamepad_found:
+                    print 'gamepad found'
                     self.gamepad_tcp = cv_network_controller.connect_to_tcp_host(
                         packet['ip_address'], self.gamepad_settings['port']
                     )
