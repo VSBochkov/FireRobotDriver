@@ -240,7 +240,7 @@ class FireRobotDriver:
             ready_state_handler=self.__vproc_ready,
             closed_state_handler=self.__vproc_closed,
             meta_handler=self.__metadata_received,
-            cvproc_json_path=fire_robot_driver_path + '/fire_overlay_on_pc.json'
+            cvproc_json_path=fire_robot_driver_path + '/fire_overlay_on_web.json'
         )
 
         resolution = tuple(self.cv_client.cv_process_description['proc_resolution'].split('x'))
