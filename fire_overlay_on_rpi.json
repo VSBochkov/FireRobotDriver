@@ -1,7 +1,7 @@
 {
-  "input_path": "../videos/fire2i7.mp4",
-  "fake_output_p": "file:./overFire222i7.avi",
-  "output_path": "udp:5656/overlay2i7.avi",
+  "input_path": "../videos/fire2rpi.mp4",
+  "fake_output_p": "file:./overFire2rpi.avi",
+  "output_path": "udp:5656/overlay2rpi.avi",
   "process": [{
       "node": "RFireMaskingModel",
       "children": [{
