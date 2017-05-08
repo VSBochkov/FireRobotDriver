@@ -209,6 +209,7 @@ class FireRobotDriver:
         client_was_run = False
         autogun_run = False
         driver_running = True
+
         while driver_running:
             try:
                 packet = self.driver_queue.get_nowait()
@@ -220,7 +221,7 @@ class FireRobotDriver:
                     self.gamepad_tcp = cv_network_controller.connect_to_tcp_host(
                         packet['ip_address'], self.gamepad_settings['port']
                     )
-                    print 'gamepad connected'
+                    print '__driver: gamepad connected at: {}'.format(self.gamepad_tcp.getpeername())
                 elif packet['type'] == FireRobotDriver.autogun_on:
                     print '__driver: Autogun active'
                     autogun_run = True
@@ -239,7 +240,15 @@ class FireRobotDriver:
             finally:
                 if self.gamepad_tcp is not None:
                     command = cv_network_controller.async_receive_byte(self.gamepad_tcp)
-                    if command is not None:
+                    if command == cv_network_controller.connection_is_broken:
+                        print '__driver: gamepad disconnected, wait for connection is established again'
+                        gamepad_host = self.gamepad_tcp.getpeername()
+                        self.gamepad_tcp.close()
+                        self.gamepad_tcp = cv_network_controller.connect_to_tcp_host(gamepad_host[0], gamepad_host[1])
+                        print '__driver: gamepad has been connected'
+                    elif command == cv_network_controller.no_data:
+                        pass
+                    else:
                         print '__driver: command is: {}'.format(command)
                         if command == FireRobotDriver.autogun:
                             if autogun_run:             # autogun was activated
@@ -249,13 +258,6 @@ class FireRobotDriver:
                                 print '__driver: run autogun'
                                 self.cv_client.run()    # run autogun
                         self.uart.write(command)
-                    else:
-                        print '__driver: gamepad disconnected, wait for connection is established again'
-                        self.gamepad_tcp.close()
-                        self.gamepad_tcp = cv_network_controller.connect_to_tcp_host(
-                            packet['ip_address'], self.gamepad_settings['port']
-                        )
-                        print '__driver: gamepad has been connected'
         self.network_controller.stop()
         print 'exit from __driver'
 
