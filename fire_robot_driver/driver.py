@@ -57,7 +57,7 @@ class FireRobotDriver:
         self.ema_right = 0.
         self.ema_up = 0.
         self.ema_down = 0.
-        self.aimed_thresh = 0.7
+        self.aimed_thresh = 0.2
         self.move_thresh = 0.7
         self.pump_active = False
         self.qfps = self.fps / 4
@@ -124,21 +124,10 @@ class FireRobotDriver:
 
     def __drive_gun(self, meta):
         if 'FlameSrcBBox' not in meta.keys():
-            self.ema_aimed = (self.ema_aimed * self.fps) / float(self.fps + 1.)
-            self.ema_up = (self.ema_up * self.qfps) / float(self.qfps + 1.)
-            self.ema_down = (self.ema_down * self.qfps) / float(self.qfps + 1.)
-            self.ema_left = (self.ema_left * self.qfps) / float(self.qfps + 1.)
-            self.ema_right = (self.ema_right * self.qfps) / float(self.qfps + 1.)
             return
-        self.meta_iteration += 1
         rects = meta['FlameSrcBBox']['bboxes']
         self.biggest_rect = self.__get_biggest_rect(rects)
         if self.biggest_rect is None:
-            self.ema_aimed = (self.ema_aimed * self.fps) / float(self.fps + 1.)
-            self.ema_up = (self.ema_up * self.qfps) / float(self.qfps + 1.)
-            self.ema_down = (self.ema_down * self.qfps) / float(self.qfps + 1.)
-            self.ema_left = (self.ema_left * self.qfps) / float(self.qfps + 1.)
-            self.ema_right = (self.ema_right * self.qfps) / float(self.qfps + 1.)
             return
 
         x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
@@ -154,26 +143,21 @@ class FireRobotDriver:
             command += FireRobotDriver.pump_on
             self.pump_active = False
 
-        self.ema_up = float(self.ema_up * self.qfps + int(cy <= y - h)) / (self.qfps + 1)
-        self.ema_down = float(self.ema_down * self.qfps + int(cy >= y)) / (self.qfps + 1)
-        self.ema_right = float(self.ema_right * self.qfps + int(cx <= x)) / (self.qfps + 1)
-        self.ema_left = float(self.ema_left * self.qfps + int(cx >= x + w)) / (self.qfps + 1)
-
-        if self.meta_iteration == self.quater_second:
-            if self.ema_up > self.move_thresh or self.ema_down > self.move_thresh:
-                command += FireRobotDriver.gun_up if self.ema_up > self.ema_down else FireRobotDriver.gun_down
-            elif self.ema_left > self.move_thresh or self.ema_right > self.move_thresh:
-                command += FireRobotDriver.gun_left if self.ema_left > self.ema_right else FireRobotDriver.gun_right
-            self.meta_iteration = 0
+        if cy >= y + h:
+            command += FireRobotDriver.gun_up
+        elif cy <= y:
+            command += FireRobotDriver.gun_down
+        elif cx <= x:
+            command += FireRobotDriver.gun_right
+        elif cx >= x + w:
+            command += FireRobotDriver.gun_left
 
         print '__drive_gun: iteration = {}'.format(self.meta_iteration)
         print '__drive_gun: target bbox: {}'.format(self.biggest_rect)
-        print '__drive_gun: ema: aimed = {}, up = {}, down = {}, left = {}, right = {}'.format(
-            self.ema_aimed, self.ema_up, self.ema_down, self.ema_left, self.ema_right
-        )
-        print '__drive_gun: send {} to arduino'.format(command)
+        print '__drive_gun: ema: aimed = {}'.format(self.ema_aimed)
 
         if len(command) > 0:
+            print '__drive_gun: send {} to arduino'.format(command)
             self.uart.write(command)
 
 
