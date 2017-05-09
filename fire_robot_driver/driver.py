@@ -4,6 +4,7 @@ import multiprocessing
 import Queue
 import os
 import math
+import time
 
 from cv_kernel import cv_client
 from cv_kernel import cv_network_controller
@@ -159,8 +160,9 @@ class FireRobotDriver:
 
         if len(command) > 0:
             print '__drive_gun: send {} to arduino'.format(command)
-            self.uart.write(command)
-
+            for char in command:
+                self.uart.write(char)
+                time.sleep(0.003)
 
     '''def __drive_gun(self, packet):
         rects = packet['FlameSrcBBox']['bboxes']
