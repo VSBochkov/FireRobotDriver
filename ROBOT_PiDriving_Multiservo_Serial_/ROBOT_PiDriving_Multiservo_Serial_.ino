@@ -43,24 +43,24 @@ double gun_z_ang;
 unsigned long cnt_max = 1600000;
 unsigned long cnt = 0;
 
-String command;
-String robot_forw = "1",
-       robot_back = "2", 
-       robot_right = "3", 
-       robot_left = "4",
-       gun_up = "5",
-       gun_down = "6",
-       gun_left = "7",
-       gun_right = "8",
-       pump_on = "p",
-       stop = "s",
-       power_off = "e",
-       auto_gun = "a";
+char robot_forw = '1',
+     robot_back = '2', 
+     robot_right = '3', 
+     robot_left = '4',
+     gun_up = '5',
+     gun_down = '6',
+     gun_left = '7',
+     gun_right = '8',
+     pump_on = 'p',
+     stop = 's',
+     pump_off = 'e',
+     auto_gun = 'a';
+
+char command = stop;
 
 double kGun_xy = 1., kGun_z = -1.;
 unsigned char drive_sm;
 unsigned char auto_gun_state = 0;
-int pump = LOW;
 unsigned char purpose_command();
 void doing_command();
 void stop_servo(Servo *servo);
@@ -70,7 +70,6 @@ double getTemperature();
 void setup() {
   // put your setup code here, to run once:
   Serial.begin(9600);
-
   drive_sm = DRIVE_STOP;
   pinMode(PUMP_PIN, OUTPUT);
   forw_left.attach(PIN_SERVO_FL);
@@ -83,6 +82,7 @@ void setup() {
   gun_z_ang  = 90;
   gun_xy.write(gun_xy_ang);
   gun_z.write(gun_z_ang);
+  digitalWrite(PUMP_PIN, LOW);
   doing_command();
 }
 
@@ -91,8 +91,11 @@ void loop() {
   
   if(Serial.available()) {
     drive_sm = purpose_command();
+    doing_command();
+    Serial.write('o');
+  } else {
+    doing_command();
   }
-  doing_command();
   delay(1);
 }
 
@@ -100,44 +103,46 @@ unsigned char purpose_command()
 {
   command = (char)Serial.read();
 
-  if (command.equal(auto_gun)) {
+  if (command == auto_gun) {
      auto_gun_state = auto_gun_state == 0 ? 1 : 0;
      return DRIVE_STOP;
   }
-  if (command.equal(robot_forw)) {
+  if (command == robot_forw) {
      return DRIVE_FULL_FORW;
   }
-  else if (command.equal(robot_back)) {
+  else if (command == robot_back) {
      return DRIVE_FULL_BACK;
   }
-  else if (command.equal(robot_left)) {
+  else if (command == robot_left) {
      return DRIVE_LEFT;
   }
-  else if (command.equal(robot_right)) {
+  else if (command == robot_right) {
      return DRIVE_RIGHT;
   }
-  else if (command.equal(gun_up)) {
+  else if (command == gun_up) {
       if(gun_z_ang < 170)    return GUN_UP;
       else                   return DRIVE_STOP;
-    }
   }
-  else if(command.equal(gun_down)) {
+  else if (command == gun_down) {
        if (gun_z_ang > 10)   return GUN_DOWN;
        else                  return DRIVE_STOP;
-    }
   }
-  else if (command.equal(gun_left)) {
+  else if (command == gun_left) {
       if(gun_xy_ang < 170)   return GUN_LEFT;
       else                   return DRIVE_STOP;
-    }
   }
-  else if(command.equal(gun_right)) {
+  else if (command == gun_right) {
       if(gun_xy_ang > 10)    return GUN_RIGHT;
       else                   return DRIVE_STOP;
-    }
   }
-  else if(command.equal(pump_on))
+  else if (command == pump_on) {
     return PUMP_ON;
+  } 
+  else if (command == pump_off) {
+    return PUMP_OFF;
+  }
+  else if (command == stop) {
+    return DRIVE_STOP;
   }
 }
 
@@ -187,7 +192,7 @@ void doing_command()
     case GUN_UP:
     {
       if (auto_gun_state == 1) {
-          gun_z_ang += 0.25;
+          gun_z_ang += 0.1;
           drive_sm = DRIVE_STOP;
       } else {
           gun_z_ang += kGun_z * 0.01;
@@ -198,7 +203,7 @@ void doing_command()
     case GUN_DOWN:
     {
       if (auto_gun_state == 1) {
-          gun_z_ang -= 0.25;
+          gun_z_ang -= 0.1;
           drive_sm = DRIVE_STOP;
       } else {
           gun_z_ang -= kGun_z * 0.01;
@@ -209,7 +214,7 @@ void doing_command()
     case GUN_LEFT:
     {
       if (auto_gun_state == 1) {
-          gun_xy_ang += 0.5;
+          gun_xy_ang += 0.1;
           drive_sm = DRIVE_STOP;
       } else {    
           gun_xy_ang += kGun_xy * 0.01;
@@ -220,7 +225,7 @@ void doing_command()
     case GUN_RIGHT:
     {
       if (auto_gun_state == 1) {
-          gun_xy_ang -= 0.5;
+          gun_xy_ang -= 0.1;
           drive_sm = DRIVE_STOP;
       } else {    
           gun_xy_ang -= kGun_xy * 0.01;
@@ -230,7 +235,12 @@ void doing_command()
     }
     case PUMP_ON:
     {
-      pump = pump == HIGH ? LOW : HIGH;
+      digitalWrite(PUMP_PIN, HIGH);
+      break;
+    }
+    case PUMP_OFF:
+    {
+      digitalWrite(PUMP_PIN, LOW);
       break;
     }
   }
@@ -239,7 +249,6 @@ void doing_command()
   run_servo(&forw_right, PIN_SERVO_FR, cfr);
   run_servo(&back_left, PIN_SERVO_BL, cbl);
   run_servo(&back_right, PIN_SERVO_BR, cbr);
-  digitalWrite(PUMP_PIN, pump);
 }
 
 void stop_servo(Servo *srv)
