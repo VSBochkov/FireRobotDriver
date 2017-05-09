@@ -24,11 +24,11 @@ class FireRobotDriver:
     gun_down = '6'  # gun down
     gun_left = '7'  # gun left
     gun_right = '8'  # gun right
-    pump_on = 'p'  # pump on
+    pump_on = 'p'   # pump on
+    pump_off = 'e'  # pump off
     stop = 's'
     autogun = 'a'  # activate autogun
     power_off = 'z'
-    cvproc_enabled = 'e'
 
     def __init__(self):
         self.driver_queue = multiprocessing.Queue()
@@ -138,11 +138,11 @@ class FireRobotDriver:
         aimed = int((x <= cx <= x + w) and (y <= cy <= y + h))
         self.ema_aimed = float(self.ema_aimed * self.fps + aimed) / float(self.fps + 1.)
         command = ''
-        if self.ema_aimed >= self.aimed_thresh and not self.pump_active:
+        if self.ema_aimed >= self.aimed_thresh + 0.2 and not self.pump_active:
             command += FireRobotDriver.pump_on
             self.pump_active = True
         elif self.ema_aimed < self.aimed_thresh and self.pump_active:
-            command += FireRobotDriver.pump_on
+            command += FireRobotDriver.pump_off
             self.pump_active = False
 
         if cy >= y + h:     # y is reverted [0 at top, frame height at bottom]
@@ -162,7 +162,7 @@ class FireRobotDriver:
             print '__drive_gun: send {} to arduino'.format(command)
             for char in command:
                 self.uart.write(char)
-                time.sleep(0.003)
+                ans = self.uart.read(1)
 
     '''def __drive_gun(self, packet):
         rects = packet['FlameSrcBBox']['bboxes']
@@ -245,6 +245,7 @@ class FireRobotDriver:
                                 print '__driver: run autogun'
                                 self.cv_client.run()    # run autogun
                         self.uart.write(command)
+                        ans = self.uart.read(1)
         self.network_controller.stop()
         print 'exit from __driver'
 

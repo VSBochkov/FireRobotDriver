@@ -1,7 +1,7 @@
 {
   "input_device": 1,
-  "fake_output_p": "file:./overFire222i7.avi",
-  "output_path": "udp:5656/overlay2i7.avi",
+  "output_path": "file:./overFire222i7.avi",
+  "fake_output_path": "udp:5656/overlay2i7.avi",
   "process": [{
       "node": "RFireMaskingModel",
       "children": [{
