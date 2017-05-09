@@ -131,8 +131,13 @@ class FireRobotDriver:
             return
 
         x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
-        cx = self.image_resolution[0] / 2
-        cy = self.image_resolution[1] / 2
+        r_cy = y + h / 2
+        r_cx = x + w / 2
+        # shift_y = self.image_resolution[1] * 0.1
+        dr_x = int(self.image_resolution[0] / 20)
+        dr_y = int(self.image_resolution[1] / 20)
+        cx = int(self.image_resolution[0] / 2)
+        cy = int(self.image_resolution[1] / 2)
         aimed = int((x <= cx <= x + w) and (y <= cy <= y + h))
         self.ema_aimed = float(self.ema_aimed * self.fps + aimed) / float(self.fps + 1.)
         command = ''
@@ -143,13 +148,13 @@ class FireRobotDriver:
             command += FireRobotDriver.pump_on
             self.pump_active = False
 
-        if cy >= y + h:     # y is reverted [0 at top, frame height at bottom]
+        if cy >= r_cy + dr_y:     # y is reverted [0 at top, frame height at bottom]
             command += FireRobotDriver.gun_up
-        elif cy <= y:       # y is reverted [0 at top, frame height at bottom]
+        elif cy <= r_cy - dr_y:       # y is reverted [0 at top, frame height at bottom]
             command += FireRobotDriver.gun_down
-        elif cx <= x:
+        elif cx <= r_cx - dr_x:
             command += FireRobotDriver.gun_right
-        elif cx >= x + w:
+        elif cx >= r_cx + dr_x:
             command += FireRobotDriver.gun_left
 
         print '__drive_gun: iteration = {}'.format(self.meta_iteration)
