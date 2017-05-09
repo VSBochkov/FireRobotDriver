@@ -133,7 +133,7 @@ class FireRobotDriver:
         x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
         cx = self.image_resolution[0] / 2
         cy = self.image_resolution[1] / 2
-        aimed = int(x <= cx <= x + w and y - h <= cy <= y)          # y is reverted [0 at top, frame height at bottom]
+        aimed = int((x <= cx <= x + w) and (y <= cy <= y + h))
         self.ema_aimed = float(self.ema_aimed * self.fps + aimed) / float(self.fps + 1.)
         command = ''
         if self.ema_aimed >= self.aimed_thresh and not self.pump_active:
@@ -143,9 +143,9 @@ class FireRobotDriver:
             command += FireRobotDriver.pump_on
             self.pump_active = False
 
-        if cy >= y + h:
+        if cy >= y + h:     # y is reverted [0 at top, frame height at bottom]
             command += FireRobotDriver.gun_up
-        elif cy <= y:
+        elif cy <= y:       # y is reverted [0 at top, frame height at bottom]
             command += FireRobotDriver.gun_down
         elif cx <= x:
             command += FireRobotDriver.gun_right
