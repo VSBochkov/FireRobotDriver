@@ -40,8 +40,6 @@ Servo gun_xy;
 Servo gun_z;
 double gun_xy_ang;
 double gun_z_ang;
-unsigned long cnt_max = 1600000;
-unsigned long cnt = 0;
 
 char robot_forw = '1',
      robot_back = '2', 
@@ -192,7 +190,7 @@ void doing_command()
     case GUN_UP:
     {
       if (auto_gun_state == 1) {
-          gun_z_ang += 0.1;
+          gun_z_ang += 1.0;
           drive_sm = DRIVE_STOP;
       } else {
           gun_z_ang += kGun_z * 0.01;
@@ -203,7 +201,7 @@ void doing_command()
     case GUN_DOWN:
     {
       if (auto_gun_state == 1) {
-          gun_z_ang -= 0.1;
+          gun_z_ang -= 1.0;
           drive_sm = DRIVE_STOP;
       } else {
           gun_z_ang -= kGun_z * 0.01;
@@ -214,7 +212,7 @@ void doing_command()
     case GUN_LEFT:
     {
       if (auto_gun_state == 1) {
-          gun_xy_ang += 0.1;
+          gun_xy_ang += 1.0;
           drive_sm = DRIVE_STOP;
       } else {    
           gun_xy_ang += kGun_xy * 0.01;
@@ -225,7 +223,7 @@ void doing_command()
     case GUN_RIGHT:
     {
       if (auto_gun_state == 1) {
-          gun_xy_ang -= 0.1;
+          gun_xy_ang -= 1.0;
           drive_sm = DRIVE_STOP;
       } else {    
           gun_xy_ang -= kGun_xy * 0.01;
