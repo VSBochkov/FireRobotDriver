@@ -139,7 +139,7 @@ class FireRobotDriver:
             return
 
         x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
-        shift_x = self.image_resolution[0] * 0.15
+        shift_x = 0     # self.image_resolution[0] * 0.15
         shift_y = self.image_resolution[1] / 4
         cx = int(self.image_resolution[0] / 2 + shift_x)
         cy = int(self.image_resolution[1] / 2 + shift_y)
