@@ -124,7 +124,7 @@ class FireRobotDriver:
 
     def __drive_gun(self, meta):
         if 'FlameSrcBBox' not in meta.keys():
-            self.ema_aimed = float(self.ema_aimed * self.fps) / float(self.fps + 1.)
+            self.ema_aimed = float(self.ema_aimed * self.fps * 3) / float(self.fps * 3 + 1.)
             if self.ema_aimed < self.aimed_thresh and self.pump_active:
                 self.uart.write(FireRobotDriver.pump_off)
                 self.uart.read(1)
@@ -140,7 +140,7 @@ class FireRobotDriver:
 
         x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h']
         shift_x = 0     # self.image_resolution[0] * 0.15
-        shift_y = self.image_resolution[1] / 4
+        shift_y = 0     # self.image_resolution[1] / 4
         cx = int(self.image_resolution[0] / 2 + shift_x)
         cy = int(self.image_resolution[1] / 2 + shift_y)
         r_cx = int(x + w / 2)
@@ -197,7 +197,8 @@ class FireRobotDriver:
             print '__drive_gun: send {} to arduino'.format(command)
             for char in command:
                 self.uart.write(char)
-                ans = self.uart.read(1)
+                self.uart.read(1)
+                time.sleep(0.001)
 
     '''def __drive_gun(self, packet):
         rects = packet['FlameSrcBBox']['bboxes']
