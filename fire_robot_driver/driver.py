@@ -62,7 +62,7 @@ class FireRobotDriver:
         self.move_thresh = 0.4
         self.pump_active = False
         self.meta_iteration = 0
-        self.half_second = math.ceil(self.fps / 2)
+        self.second = math.ceil(self.fps)
         self.driver.run()
 
     def __gamepad_found(self, mac, ip_address):
@@ -165,11 +165,11 @@ class FireRobotDriver:
         print '__drive_gun: iteration = {}'.format(self.meta_iteration)
         print '__drive_gun: target bbox: {}'.format(self.biggest_rect)
 
-        if self.meta_iteration == self.half_second:
-            self.aver_down = float(self.aver_down / float(self.half_second))
-            self.aver_up = float(self.aver_up / float(self.half_second))
-            self.aver_left = float(self.aver_left / float(self.half_second))
-            self.aver_right = float(self.aver_right / float(self.half_second))
+        if self.meta_iteration == self.second:
+            self.aver_down = float(self.aver_down / float(self.second))
+            self.aver_up = float(self.aver_up / float(self.second))
+            self.aver_left = float(self.aver_left / float(self.second))
+            self.aver_right = float(self.aver_right / float(self.second))
             print '__drive_gun: aver_down = {}, aver_up = {}, aver_left = {}, aver_right = {}'.format(
                 self.aver_down, self.aver_up, self.aver_left, self.aver_right
             )
