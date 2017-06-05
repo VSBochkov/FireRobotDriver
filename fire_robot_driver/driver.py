@@ -29,7 +29,8 @@ class FireRobotDriver:  # Определение класса драйвера
     stop = 's'          # Команда остановки предыдущей команды
     autogun = 'a'       # Команда активации автоприцеливания
 
-    def __init__(self):     # Конструктор класса
+    def __init__(self, num_strategy):     # Конструктор класса
+        self.num_strategy = num_strategy
         self.driver_queue = multiprocessing.Queue()     # Создание очереди команд управления роботом
         self.driver = multiprocessing.Process(target=self.__driver)     # Создание процесса управления роботом
         fire_robot_driver_path = os.environ.get('FIRE_ROBOT_DRIVER_PATH')   # Инициализация пути до дирректории с исходным кодом
@@ -121,7 +122,7 @@ class FireRobotDriver:  # Определение класса драйвера
     def __metadata_received(self, metadata):    # Обработчик входящих метаданных
         self.driver_queue.put({'type': FireRobotDriver.meta, 'meta': metadata})     # Вставляем в очередь сообщение о принятии метаданных
 
-    def __drive_gun(self, meta):    # Метод реализации автоприцеливания
+    def __drive_gun_xy(self, meta):    # Метод реализации автоприцеливания
         if 'FlameSrcBBox' not in meta.keys():   # Если в метаданных нет списка прямоугольных областей очагов пожара
             self.ema_aimed = float(self.ema_aimed * self.fps * 3) / float(self.fps * 3 + 1.)    # Уменьшаем среднее активации помпы
             if self.ema_aimed < self.aimed_thresh and self.pump_active: # Если среднее прицеливания меньше порога и помпа была активирована
@@ -171,18 +172,78 @@ class FireRobotDriver:  # Определение класса драйвера
             )   # прицела в интерфейс командной строки
             move_y = ((float(self.aver_down) > self.move_thresh) or (float(self.aver_up) > self.move_thresh))       # Генерируем команды
             move_x = ((float(self.aver_right) > self.move_thresh) or (float(self.aver_left) > self.move_thresh))    # поворота дула в очаг пожара
-            if move_x:  # Если принято решение поворота дула по азимуту
+            if move_y:  # Если принято решение поворота дула по высоте
                 if self.aver_down > self.aver_up:           # То определяем
                     command += FireRobotDriver.gun_down     # направление
                 else:                                       # смещения
                     command += FireRobotDriver.gun_up       # прицела
-            if move_y:  # Если принято решение поворота дула по высоте
+            if move_x:  # Если принято решение поворота дула по азимуту
                 if self.aver_left > self.aver_right:        # То определяем
                     command += FireRobotDriver.gun_left     # направление
                 else:                                       # смещения
                     command += FireRobotDriver.gun_right    # прицела
             self.aver_down = 0.     # Сбрасываем средние
             self.aver_up = 0.       # характеристики
+            self.aver_right = 0.    # поворота
+            self.aver_left = 0.     # дула
+            self.meta_iteration = 0 # Сбрасываем счетчик итераций
+
+        print '__drive_gun: ema: aimed = {}'.format(self.ema_aimed)     # Вывод характеристики наведения в интерфейс командной строки
+
+        if len(command) > 0:    # Если список команд для управления мехатронной частью не пуст
+            print '__drive_gun: send {} to arduino'.format(command) # То вывод команд посылаемых на Arduino
+            for char in command:        # Пересчет в цикле всех команд списка
+                self.uart.write(char)   # Посылаем команду на Arduino
+                self.uart.read(1)       # принимаем результат обработки команды
+                time.sleep(0.001)       # останавливаем поток на 1 мс
+
+    def __drive_gun_x(self, meta):    # Метод реализации автоприцеливания
+        if 'FlameSrcBBox' not in meta.keys():   # Если в метаданных нет списка прямоугольных областей очагов пожара
+            self.ema_aimed = float(self.ema_aimed * self.fps * 3) / float(self.fps * 3 + 1.)    # Уменьшаем среднее активации помпы
+            if self.ema_aimed < self.aimed_thresh and self.pump_active: # Если среднее прицеливания меньше порога и помпа была активирована
+                self.uart.write(FireRobotDriver.pump_off)   # Посылаем команду остановки насоса
+                self.uart.read(1)           # Прочитываем ответ от Arduino
+                self.pump_active = False    # Флаг работы помпы инициализируем значением "Остановлен"
+            return  # Возврат из функции
+
+        self.meta_iteration += 1        # увеличиваем номер итерации
+        rects = meta['FlameSrcBBox']['bboxes']  # Извлекаем массив прямоугольных областей очагов пожара из метаданных
+        self.biggest_rect = self.__get_biggest_rect(rects)  # Находим наиближайший прямоугольник
+        if self.biggest_rect is None:   # Если он не инициализирован
+            return  # Возврат из функции
+
+        x, y, w, h = self.biggest_rect['x'], self.biggest_rect['y'], self.biggest_rect['w'], self.biggest_rect['h'] # Считываем компоненты наиближайшего прямоугольника
+        cx = int(self.image_resolution[0] / 2)      # Инициализируем координаты
+        r_cx = int(x + w / 2)                       # Инициализируем координаты
+        d_rx = int(self.image_resolution[0] / 20)   # Инициализируем
+        aimed = int(x <= cx <= x + w)  # Устанавливаем флаг прицеливания как нахождения центра кадра внутри прямоугольника
+        self.ema_aimed = float(self.ema_aimed * self.fps + aimed) / float(self.fps + 1.)    # Пересчет среднего компонента наведения прицела
+        command = ''    # Определяем строку команд на мехатронную часть робота
+        if self.ema_aimed >= self.aimed_thresh + 0.2 and not self.pump_active:  # Если среднее прицеливания больше порога и помпа деактивирована
+            command += FireRobotDriver.pump_on  # Активируем помпу
+            self.pump_active = True             # Устанавливаем флаг активности насоса
+        elif self.ema_aimed < self.aimed_thresh and self.pump_active:   # Если среднее прицеливания меньше порога и помпа активирована
+            command += FireRobotDriver.pump_off # Останавливаем насос
+            self.pump_active = False            # Устанавливаем флаг неактивности насоса
+
+        self.aver_left += float(cx > r_cx + d_rx)   # Аккумулируем средние компоненты
+        self.aver_right += float(cx < r_cx - d_rx)  # смещения прицела в сторону центра очага пожара
+
+        print '__drive_gun: iteration = {}'.format(self.meta_iteration) # Выводим значения текущей итерации
+        print '__drive_gun: target bbox: {}'.format(self.biggest_rect)  # обработки метаданных в интерфейс командной строки
+
+        if self.meta_iteration == self.second:      # Если количество итераций равно количеству кадров в одной секунде
+            self.aver_left = float(self.aver_left / float(self.second))     # Усредняем аккумулируемые
+            self.aver_right = float(self.aver_right / float(self.second))   # компоненты смещения прицела
+            print '__drive_gun: aver_left = {}, aver_right = {}'.format(  # Выводим значения
+                self.aver_left, self.aver_right   # компонент смещения
+            )   # прицела в интерфейс командной строки
+            move_x = ((float(self.aver_right) > self.move_thresh) or (float(self.aver_left) > self.move_thresh))    # поворота дула в очаг пожара
+            if move_x:  # Если принято решение поворота дула по высоте
+                if self.aver_left > self.aver_right:        # То определяем
+                    command += FireRobotDriver.gun_left     # направление
+                else:                                       # смещения
+                    command += FireRobotDriver.gun_right    # прицела
             self.aver_right = 0.    # поворота
             self.aver_left = 0.     # дула
             self.meta_iteration = 0 # Сбрасываем счетчик итераций
@@ -222,7 +283,10 @@ class FireRobotDriver:  # Определение класса драйвера
                     autogun_run = False                     # Сбрасываем статус работы алгоритма автоприцеливания
                     self.biggest_rect = None                # Сбрасываем наиближайший прямоугольник для наведения прицела
                 elif packet['type'] == FireRobotDriver.meta and autogun_run:    # Если тип пакета - метаданные и режим автоприцеливания активирован
-                    self.__drive_gun(packet['meta'])        # Вызываем метод выполнения итерации автоприцеливания
+                    if self.num_strategy == 0:
+                        self.__drive_gun_xy(packet['meta']) # Вызываем метод выполнения итерации автоприцеливания по двум осям
+                    elif self.num_strategy == 1:
+                        self.__drive_gun_x(packet['meta'])  # Вызываем метод выполнения итерации автоприцеливания по азимуту с вертикальной раскачкой
                 elif packet['type'] == FireRobotDriver.client_closed:   # Если тип пакета - закрытие клиента ядра
                     print '__driver: cv_client closed'      # То выводим эту информацию в интерфейс командной строки
                     if client_was_run:                      # Если клиент был активирован
@@ -255,7 +319,7 @@ class FireRobotDriver:  # Определение класса драйвера
 
 
 def run():      # Метод активации драйвера
-    FireRobotDriver()   # Создаем объект драйвера
+    FireRobotDriver(1)   # Создаем объект драйвера
 
 if __name__ == '__main__':  # Если файл запущен из интерпретатора
     run()       # Вызываем метод активации драйвера
