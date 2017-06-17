@@ -28,6 +28,10 @@ class FireRobotDriver:  # Определение класса драйвера
     pump_off = 'e'      # Команда выключения насоса
     stop = 's'          # Команда остановки предыдущей команды
     autogun = 'a'       # Команда активации автоприцеливания
+    gun_right05 = 'b'
+    gun_right2 = 'd'
+    gun_left05 = 'f'
+    gun_left2 = 'g'
 
     def __init__(self, num_strategy):     # Конструктор класса
         self.num_strategy = num_strategy
@@ -241,9 +245,19 @@ class FireRobotDriver:  # Определение класса драйвера
             move_x = ((float(self.aver_right) > self.move_thresh) or (float(self.aver_left) > self.move_thresh))    # поворота дула в очаг пожара
             if move_x:  # Если принято решение поворота дула по высоте
                 if self.aver_left > self.aver_right:        # То определяем
-                    command += FireRobotDriver.gun_left     # направление
+                    if r_cx < cx / 2:
+                        command += FireRobotDriver.gun_left2
+                    elif r_cx > (cx - 2 * d_rx):
+                        command += FireRobotDriver.gun_left05
+                    else:
+                        command += FireRobotDriver.gun_left     # направление
                 else:                                       # смещения
-                    command += FireRobotDriver.gun_right    # прицела
+                    if r_cx > int(1.5 * cx):
+                        command += FireRobotDriver.gun_right2
+                    elif r_cx < (cx + 2 * d_rx):
+                        command += FireRobotDriver.gun_right05
+                    else:
+                        command += FireRobotDriver.gun_right     # направление
             self.aver_right = 0.    # поворота
             self.aver_left = 0.     # дула
             self.meta_iteration = 0 # Сбрасываем счетчик итераций
